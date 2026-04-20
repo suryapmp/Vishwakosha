@@ -1,4 +1,5 @@
 import { useState, useEffect, ChangeEvent } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { 
   Search, 
   Volume2, 
@@ -65,6 +66,29 @@ export default function App() {
   const [quizMode, setQuizMode] = useState(false);
   const [quizAnswer, setQuizAnswer] = useState('');
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
+
+  const {
+    offlineReady: [offlineReady, setOfflineReady],
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      console.log('Service Worker Registered');
+      if (r) {
+        setInterval(() => {
+          r.update();
+        }, 60 * 60 * 1000); // Check for updates every hour
+      }
+    },
+    onRegisterError(error) {
+      console.log('Service Worker registration error', error);
+    },
+  });
+
+  useEffect(() => {
+    if (needRefresh) console.log("New version detected");
+    if (offlineReady) console.log("Cache updated");
+  }, [needRefresh, offlineReady]);
 
   // Initialize from LocalStorage
   useEffect(() => {
@@ -962,6 +986,39 @@ export default function App() {
           </motion.div>
         </div>
       )}
+
+      {/* PWA Update Notification Banner */}
+      <AnimatePresence>
+        {needRefresh && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-md print:hidden">
+            <motion.div 
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="bg-blue-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-blue-400/30 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-xl">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold">New update available</span>
+                  <span className="text-[10px] opacity-80">Click update for the latest version</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  updateServiceWorker(true);
+                  window.location.reload();
+                }}
+                className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-50 transition-colors whitespace-nowrap shadow-lg active:scale-95"
+              >
+                UPDATE NOW
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {

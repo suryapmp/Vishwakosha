@@ -11,8 +11,11 @@ export default defineConfig(({mode}) => {
       react(), 
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         injectRegister: 'auto',
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'service-worker.ts',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'icons/*.png'],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
