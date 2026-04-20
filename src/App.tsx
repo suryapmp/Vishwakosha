@@ -10,6 +10,7 @@ import {
   Loader2, 
   Download,
   BookOpen,
+  Share2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
@@ -148,6 +149,28 @@ export default function App() {
     localStorage.removeItem('vishwakosha_history');
   };
 
+  const handleShare = async (e: DictionaryEntry) => {
+    const shareText = `VishwaKosha Definition: ${e.word}\n\nEnglish: ${e.english?.extract || 'N/A'}\n\nKannada: ${e.aiTranslation?.translation || e.kannada?.extract || 'N/A'}\n\nCheck it out here: ${window.location.href}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `VishwaKosha: ${e.word}`,
+          text: shareText,
+          url: window.location.href,
+        });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          alert('Could not share. Copied to clipboard instead.');
+          navigator.clipboard.writeText(shareText);
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(shareText);
+      alert('Content copied to clipboard! (Share API not supported in this browser)');
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-[#f8fafc] text-[#1e293b] dark:bg-[#0f172a] dark:text-[#f1f5f9] font-sans">
       {/* Header */}
@@ -276,6 +299,13 @@ export default function App() {
                       }`}
                     >
                       <Star className={`w-5 h-5 ${favorites.some(f => f.word.toLowerCase() === entry.word.toLowerCase()) ? 'fill-current' : ''}`} />
+                    </button>
+                    <button 
+                      onClick={() => handleShare(entry)}
+                      className="p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700 hover:text-blue-500 transition-all active:scale-95"
+                      title="Share Entry"
+                    >
+                      <Share2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
