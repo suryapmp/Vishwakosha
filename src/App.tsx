@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { 
   Search, 
   Volume2, 
@@ -25,8 +25,14 @@ import {
   Minimize2,
   ChevronLeft,
   MonitorPlay,
+  Camera,
+  BrainCircuit,
+  CheckCircle2,
+  Copy,
+  Languages,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import Tesseract from 'tesseract.js';
 import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
 import { DictionaryEntry } from './types';
 
@@ -54,6 +60,11 @@ export default function App() {
   const [lectureMode, setLectureMode] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [wordOfTheDay, setWordOfTheDay] = useState<DictionaryEntry | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [quizMode, setQuizMode] = useState(false);
+  const [quizAnswer, setQuizAnswer] = useState('');
+  const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
 
   // Initialize from LocalStorage
   useEffect(() => {
@@ -191,6 +202,30 @@ export default function App() {
       setError('An error occurred while fetching data.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOCR = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setError(null);
+    try {
+      const { data: { text } } = await Tesseract.recognize(file, 'eng');
+      // Look for the first meaningful word in the OCR text
+      const cleanText = text.replace(/[^a-zA-Z ]/g, "").trim().split(/\s+/)[0];
+      if (cleanText.length > 2) {
+        setQuery(cleanText);
+        handleSearch(cleanText);
+        setShowScanner(false);
+      } else {
+        setError("Could not identify a clear technical term in this image.");
+      }
+    } catch (err) {
+      setError("OCR Scan failed. Please try a clearer image.");
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -356,6 +391,13 @@ export default function App() {
               >
                 <Settings className="w-5 h-5" />
               </button>
+              <label 
+                className={`p-2 rounded-full cursor-pointer transition-colors ${highContrast ? 'text-yellow-400 border border-yellow-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
+                title="Scan textbook word"
+              >
+                <Camera className="w-5 h-5" />
+                <input type="file" accept="image/*" className="hidden" onChange={handleOCR} />
+              </label>
              {deferredPrompt && (
                 <button 
                   onClick={handleInstallClick}
@@ -393,6 +435,13 @@ export default function App() {
             >
               {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
             </button>
+            <label 
+              className="mr-2 text-slate-400 hover:text-blue-500 cursor-pointer hidden md:block"
+              title="Scan textbook image"
+            >
+              <Camera className="w-4 h-4" />
+              <input type="file" accept="image/*" className="hidden" onChange={handleOCR} />
+            </label>
             <button 
               onClick={() => handleSearch(query)}
               disabled={loading}
@@ -499,6 +548,17 @@ export default function App() {
                       <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${seniorMode ? 'translate-x-5' : ''}`} />
                     </button>
                   </div>
+
+                  {/* Quiz Mode Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium flex items-center gap-2"><BrainCircuit className="w-4 h-4" /> Daily Study Quiz</span>
+                    <button 
+                      onClick={() => setQuizMode(!quizMode)}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${quizMode ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${quizMode ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
                 </div>
                 
                 <p className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 italic text-center">
@@ -531,12 +591,12 @@ export default function App() {
       <main className={`flex-1 grid grid-cols-12 gap-6 p-4 md:p-8 overflow-y-auto ${lectureMode ? 'hidden' : ''}`}>
         {/* Left Column: Result & Extras */}
         <section className={`col-span-12 flex flex-col gap-6 ${seniorMode && !entry ? 'lg:col-span-12 items-center justify-center min-h-[60vh]' : 'lg:col-span-8'}`}>
-          {!entry && (
+          {!entry && !quizMode && (
             <div className={`max-w-2xl w-full space-y-8 ${seniorMode ? 'text-center' : ''}`}>
               <div className="p-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2rem] text-white shadow-xl shadow-blue-500/10">
                 <h2 className="text-3xl font-bold mb-4">Welcome to VishwaKosha</h2>
                 <p className="text-blue-100 text-lg leading-relaxed">
-                  Search for any technical term to see its meaning in English and Kannada. Everything is saved for offline use.
+                  Search for any technical term or scan a textbook page to see meanings in English and Kannada.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   {['Algorithm', 'Encryption', 'Processor', 'Compiler'].map(word => (
@@ -550,6 +610,56 @@ export default function App() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {quizMode && history.length > 0 && !entry && (
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="max-w-2xl w-full p-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-xl text-center space-y-8"
+             >
+                <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto text-emerald-600">
+                  <BrainCircuit className="w-10 h-10" />
+                </div>
+                <div className="space-y-4">
+                  <h2 className="text-3xl font-bold">Daily Study Quiz</h2>
+                  <p className="text-slate-500">Recall the term for this Kannada definition:</p>
+                  <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl italic font-serif text-xl text-slate-700 dark:text-slate-300">
+                    "{history[Math.min(2, history.length-1)].kannada?.extract.substring(0, 150)}..."
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                   <input 
+                     type="text"
+                     value={quizAnswer}
+                     onChange={(e) => setQuizAnswer(e.target.value)}
+                     placeholder="Enter the English term..."
+                     className="w-full p-4 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-center text-lg font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
+                   />
+                   <button 
+                    onClick={() => {
+                      const correct = quizAnswer.toLowerCase().trim() === history[Math.min(2, history.length-1)].word.toLowerCase();
+                      setQuizCorrect(correct);
+                      if(correct) setTimeout(() => { setQuizMode(false); setQuizCorrect(null); setQuizAnswer(''); }, 2000);
+                    }}
+                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+                   >
+                     CHECK ANSWER
+                   </button>
+                </div>
+
+                {quizCorrect === true && <p className="text-emerald-600 font-bold flex items-center justify-center gap-2 animate-bounce"><CheckCircle2 className="w-5 h-5" /> Correct! Retaining knowledge...</p>}
+                {quizCorrect === false && <p className="text-red-500 font-bold">Not quite. Try again or check history.</p>}
+             </motion.div>
+          )}
+
+          {isScanning && (
+            <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white">
+               <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
+               <h2 className="text-2xl font-bold">Analyzing textbook page...</h2>
+               <p className="text-slate-400 mt-2">Using on-device AI to extract technical terms.</p>
             </div>
           )}
 
@@ -577,6 +687,17 @@ export default function App() {
                     >
                       <Volume2 className="w-4.5 h-4.5" />
                       Speak
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const text = `${entry.word}: ${entry.english?.extract || ''} | ${entry.kannada?.extract || ''}`;
+                        navigator.clipboard.writeText(text);
+                        alert("Definition copied for your assignment!");
+                      }}
+                      className="hidden lg:flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 font-medium hover:bg-slate-100 transition-colors"
+                    >
+                      <Copy className="w-4.5 h-4.5" />
+                      Copy
                     </button>
                     <button 
                       onClick={() => toggleFavorite(entry)}

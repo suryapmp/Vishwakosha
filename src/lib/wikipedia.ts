@@ -93,7 +93,18 @@ export async function fetchWikipediaSummary(word: string, lang: 'en' | 'kn'): Pr
   try {
     const response = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}`);
     if (!response.ok) return null;
-    return await response.json();
+    const data: WikipediaSummary = await response.json();
+    
+    // Fallback thumbnail if missing - generates a unique, stable academic-style image
+    if (!data.thumbnail) {
+      data.thumbnail = {
+        source: `https://picsum.photos/seed/${encodeURIComponent(word)}/400/300?grayscale&blur=2`,
+        width: 400,
+        height: 300
+      };
+    }
+    
+    return data;
   } catch (error) {
     console.error(`Error fetching ${lang} summary:`, error);
     return null;
