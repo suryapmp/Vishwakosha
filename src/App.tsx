@@ -31,10 +31,11 @@ import {
   CheckCircle2,
   Copy,
   Languages,
+  ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Tesseract from 'tesseract.js';
-import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
+import { fetchWikipediaSummary, fetchSuggestions, isKannada } from './lib/wikipedia';
 import { DictionaryEntry } from './types';
 
 const MAX_HISTORY = 10;
@@ -195,10 +196,18 @@ export default function App() {
     const word = wordToSearch.trim();
 
     try {
-      const [enResult, knResult] = await Promise.all([
-        fetchWikipediaSummary(word, 'en'),
-        fetchWikipediaSummary(word, 'kn'),
-      ]);
+      let enResult: any = null;
+      let knResult: any = null;
+
+      if (isKannada(word)) {
+        // Reverse Lookup: Search in KN first, find EN link
+        knResult = await fetchWikipediaSummary(word, 'kn');
+        enResult = await fetchWikipediaSummary(word, 'en');
+      } else {
+        // Standard Lookup: Search in EN first, find/translate to KN
+        enResult = await fetchWikipediaSummary(word, 'en');
+        knResult = await fetchWikipediaSummary(word, 'kn', enResult?.extract);
+      }
 
       if (enResult || knResult) {
         const newEntry: DictionaryEntry = {
@@ -702,7 +711,15 @@ export default function App() {
                     <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-1 capitalize leading-tight">
                       {entry.word}
                     </h2>
-                    <p className="text-slate-500 italic text-sm">noun / technical term</p>
+                    {(entry.english?.title.toLowerCase() !== entry.word.toLowerCase() || entry.kannada?.title !== entry.word) && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                        <span className="text-blue-600 dark:text-blue-400 font-bold">
+                           {isKannada(entry.word) ? entry.english?.title : entry.kannada?.title}
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-slate-500 italic text-sm mt-1">noun / technical term</p>
                   </div>
                   <div className="flex gap-3">
                     <button 

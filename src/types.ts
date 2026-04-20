@@ -1,6 +1,7 @@
 export interface WikipediaSummary {
   title: string;
   extract: string;
+  type?: string;
   thumbnail?: {
     source: string;
     width: number;
