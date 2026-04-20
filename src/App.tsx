@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   Copy,
   Languages,
+  FileDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Tesseract from 'tesseract.js';
@@ -66,6 +67,7 @@ export default function App() {
   const [quizMode, setQuizMode] = useState(false);
   const [quizAnswer, setQuizAnswer] = useState('');
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
+  const [ocrProgress, setOcrProgress] = useState(0);
 
   const {
     offlineReady: [offlineReady, setOfflineReady],
@@ -234,9 +236,17 @@ export default function App() {
     if (!file) return;
 
     setIsScanning(true);
+    setOcrProgress(0);
     setError(null);
     try {
-      const { data: { text } } = await Tesseract.recognize(file, 'eng');
+      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        }
+      });
+
       // Look for the first meaningful word in the OCR text
       const cleanText = text.replace(/[^a-zA-Z ]/g, "").trim().split(/\s+/)[0];
       if (cleanText.length > 2) {
@@ -287,6 +297,22 @@ export default function App() {
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem('vishwakosha_history');
+  };
+
+  const exportData = () => {
+    const data = {
+      history,
+      favorites,
+      notes,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vishwakosha-study-data-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleShare = async (e: DictionaryEntry) => {
@@ -420,7 +446,7 @@ export default function App() {
                 title="Scan textbook word"
               >
                 <Camera className="w-5 h-5" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleOCR} />
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOCR} />
               </label>
              {deferredPrompt && (
                 <button 
@@ -464,7 +490,7 @@ export default function App() {
               title="Scan textbook image"
             >
               <Camera className="w-4 h-4" />
-              <input type="file" accept="image/*" className="hidden" onChange={handleOCR} />
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOCR} />
             </label>
             <button 
               onClick={() => handleSearch(query)}
@@ -680,10 +706,27 @@ export default function App() {
           )}
 
           {isScanning && (
-            <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white">
-               <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
-               <h2 className="text-2xl font-bold">Analyzing textbook page...</h2>
-               <p className="text-slate-400 mt-2">Using on-device AI to extract technical terms.</p>
+            <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center text-white p-8 text-center">
+               <motion.div 
+                 initial={{ scale: 0.8, opacity: 0 }}
+                 animate={{ scale: 1, opacity: 1 }}
+                 className="relative mb-8"
+               >
+                 <div className="absolute inset-[-20px] border-2 border-blue-500/50 rounded-full animate-ping" />
+                 <Loader2 className="w-16 h-16 animate-spin text-blue-500" />
+               </motion.div>
+               
+               <h2 className="text-3xl font-bold mb-2">Analyzing Page...</h2>
+               <p className="text-slate-400 max-w-xs mb-8">Using local AI to scan for technical terms. No data leaves your device.</p>
+               
+               <div className="w-full max-w-xs bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
+                 <motion.div 
+                   className="h-full bg-blue-500"
+                   initial={{ width: 0 }}
+                   animate={{ width: `${ocrProgress}%` }}
+                 />
+               </div>
+               <span className="text-xs font-bold text-blue-400">{ocrProgress}% PROCESSED</span>
             </div>
           )}
 
@@ -878,14 +921,26 @@ export default function App() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Recent History</h3>
-              {history.length > 0 && (
-                <button 
-                  onClick={clearHistory}
-                  className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {history.length > 0 && (
+                  <>
+                    <button 
+                      onClick={exportData}
+                      className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors"
+                      title="Export History"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={clearHistory}
+                      className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                      title="Clear History"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             
             <div className="space-y-1 select-none">
