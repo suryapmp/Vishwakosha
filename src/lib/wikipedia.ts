@@ -1,43 +1,97 @@
 import { WikipediaSummary } from '../types';
 
 /**
- * Finds the Kannada equivalent title of an English Wikipedia page.
+ * Robust multi-source system to fetch Kannada meaning
  */
-async function getKannadaTitle(englishWord: string): Promise<string | null> {
+export async function getKannadaMeaning(word: string): Promise<WikipediaSummary | null> {
+  const wordLower = word.toLowerCase();
+  let kannadaTitle: string | null = null;
+  let wiktionaryData: any = null;
+  let translatedWord: string | null = null;
+
+  // STEP 2: Try Kannada Wikipedia using Language Links
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=langlinks&titles=${encodeURIComponent(englishWord)}&lllang=kn&format=json&origin=*&redirects=1`;
-    const response = await fetch(url);
-    const data = await response.json();
-    const pages = data.query?.pages;
-    
-    if (!pages) return null;
-    
-    const pageId = Object.keys(pages)[0];
-    const langlinks = pages[pageId].langlinks;
-    
-    if (langlinks && langlinks.length > 0) {
-      return langlinks[0]['*']; // The Kannada title
+    // We first get the canonical English title to avoid redirect issues
+    const enSumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}`);
+    const enSumData = await enSumRes.json();
+    const canonicalTitle = enSumData.title || word;
+
+    const langLinksUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(canonicalTitle)}&prop=langlinks&format=json&lllang=kn&origin=*`;
+    const llRes = await fetch(langLinksUrl);
+    const llData = await llRes.json();
+    const pages = llData.query?.pages;
+
+    if (pages) {
+      const pageId = Object.keys(pages)[0];
+      const langlinks = pages[pageId].langlinks;
+      if (langlinks && langlinks.length > 0) {
+        kannadaTitle = langlinks[0]['*'];
+        console.log("Kannada Wikipedia Title:", kannadaTitle);
+
+        const knSumRes = await fetch(`https://kn.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(kannadaTitle)}`);
+        if (knSumRes.ok) {
+          const knData = await knSumRes.json();
+          if (knData.extract) return knData;
+        }
+      }
     }
-    return null;
-  } catch (error) {
-    console.error("Error finding Kannada translation:", error);
-    return null;
+  } catch (e) {
+    console.error("Wikipedia Fallback Error:", e);
   }
+
+  // STEP 3: Wiktionary Kannada Meaning
+  try {
+    const wiktUrl = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(wordLower)}`;
+    const wiktRes = await fetch(wiktUrl);
+    if (wiktRes.ok) {
+      wiktionaryData = await wiktRes.json();
+      console.log("Wiktionary Result:", wiktionaryData);
+      
+      // Look for Kannada translations in the response
+      // Wiktionary API structure is often complex, we try to find symbols or translated text
+      const knMeaning = wiktionaryData?.kn?.[0]?.definitions?.[0]?.definition || null;
+      if (knMeaning) {
+        return {
+          title: word,
+          extract: knMeaning,
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Wiktionary Fallback Error:", e);
+  }
+
+  // STEP 4: Google Translate Fallback
+  try {
+    const transUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=kn&dt=t&q=${encodeURIComponent(word)}`;
+    const transRes = await fetch(transUrl);
+    if (transRes.ok) {
+      const transData = await transRes.json();
+      translatedWord = transData[0][0][0];
+      console.log("Translate Result:", translatedWord);
+      
+      if (translatedWord) {
+        return {
+          title: word,
+          extract: translatedWord,
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Google Translate Fallback Error:", e);
+  }
+
+  // STEP 6: Final Fallback
+  return null;
 }
 
 export async function fetchWikipediaSummary(word: string, lang: 'en' | 'kn'): Promise<WikipediaSummary | null> {
+  if (lang === 'kn') {
+    return getKannadaMeaning(word);
+  }
+  
   try {
-    let searchWord = word;
-    
-    // If we're looking for Kannada, try to find the actual Kannada title first
-    if (lang === 'kn') {
-      const knTitle = await getKannadaTitle(word);
-      if (knTitle) {
-        searchWord = knTitle;
-      }
-    }
-
-    const response = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(searchWord)}`);
+    const response = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}`);
     if (!response.ok) return null;
     return await response.json();
   } catch (error) {

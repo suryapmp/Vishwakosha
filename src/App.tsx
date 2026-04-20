@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
-import { translateTechnicalTerm } from './services/aiService';
 import { DictionaryEntry } from './types';
 
 const MAX_HISTORY = 10;
@@ -83,13 +82,12 @@ export default function App() {
     const word = wordToSearch.trim();
 
     try {
-      const [enResult, knResult, aiResult] = await Promise.all([
+      const [enResult, knResult] = await Promise.all([
         fetchWikipediaSummary(word, 'en'),
         fetchWikipediaSummary(word, 'kn'),
-        translateTechnicalTerm(word),
       ]);
 
-      if (!enResult && !knResult && !aiResult) {
+      if (!enResult && !knResult) {
         setError('Term definition not found.');
         setEntry(null);
       } else {
@@ -97,7 +95,6 @@ export default function App() {
           word,
           english: enResult || undefined,
           kannada: knResult || undefined,
-          aiTranslation: aiResult || undefined,
           timestamp: Date.now(),
         };
         setEntry(newEntry);
@@ -150,7 +147,7 @@ export default function App() {
   };
 
   const handleShare = async (e: DictionaryEntry) => {
-    const shareText = `VishwaKosha Definition: ${e.word}\n\nEnglish: ${e.english?.extract || 'N/A'}\n\nKannada: ${e.aiTranslation?.translation || e.kannada?.extract || 'N/A'}\n\nCheck it out here: ${window.location.href}`;
+    const shareText = `VishwaKosha Definition: ${e.word}\n\nEnglish: ${e.english?.extract || 'N/A'}\n\nKannada: ${e.kannada?.extract || 'N/A'}\n\nCheck it out here: ${window.location.href}`;
     
     if (navigator.share) {
       try {
@@ -337,24 +334,6 @@ export default function App() {
                       </span>
                     </div>
                     
-                    {entry.aiTranslation && (
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center justify-between mb-2">
-                           <span className="text-[10px] font-bold uppercase text-slate-400">Technical Translation</span>
-                           <Volume2 
-                             className="w-3.5 h-3.5 text-blue-500 cursor-pointer hover:scale-110 transition-transform" 
-                             onClick={() => speak(entry.aiTranslation?.translation || '', 'kn-IN')} 
-                           />
-                        </div>
-                        <p className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                          {entry.aiTranslation.translation}
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                          {entry.aiTranslation.explanation}
-                        </p>
-                      </div>
-                    )}
-
                     {entry.kannada ? (
                       <div className="space-y-4 pt-2">
                         <div className="flex items-center justify-between">
@@ -369,7 +348,7 @@ export default function App() {
                         </p>
                       </div>
                     ) : (
-                      !entry.aiTranslation && <p className="text-slate-400 text-sm italic">ಕನ್ನಡ ಅರ್ಥ ಲಭ್ಯವಿಲ್ಲ (Meaning not available).</p>
+                      <p className="text-slate-400 text-sm italic">ಕನ್ನಡ ಅರ್ಥ ಲಭ್ಯವಿಲ್ಲ (Meaning not available).</p>
                     )}
                   </div>
                 </div>

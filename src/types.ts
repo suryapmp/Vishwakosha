@@ -17,9 +17,5 @@ export interface DictionaryEntry {
   word: string;
   english?: WikipediaSummary;
   kannada?: WikipediaSummary;
-  aiTranslation?: {
-    translation: string;
-    explanation: string;
-  };
   timestamp: number;
 }
