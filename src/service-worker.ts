@@ -1,11 +1,4 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching';
-
-declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any };
-
-// This is required by vite-plugin-pwa's injectManifest strategy
-// The build tool looks specifically for the string "self.__WB_MANIFEST"
-precacheAndRoute(self.__WB_MANIFEST);
 
 const CACHE_NAME = "vishwakosha-cache-v1";
 const CORE_ASSETS = [
@@ -14,6 +7,8 @@ const CORE_ASSETS = [
   "/manifest.json",
   "/offline-dictionary.json"
 ];
+
+const self = globalThis as unknown as ServiceWorkerGlobalScope;
 
 // Install event: Cache core files
 self.addEventListener("install", (event) => {
