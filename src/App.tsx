@@ -163,6 +163,15 @@ export default function App() {
           </div>
           
           <div className="flex md:hidden items-center gap-2">
+             {deferredPrompt && (
+                <button 
+                  onClick={handleInstallClick}
+                  className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-full transition-colors"
+                  title="Install App"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+             )}
              <button 
                 onClick={toggleDarkMode}
                 className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
@@ -209,19 +218,19 @@ export default function App() {
             </div>
           )}
           
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             {deferredPrompt && (
               <button 
                 onClick={handleInstallClick}
-                className="p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 transition-colors"
-                title="Install App"
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-full shadow-md shadow-blue-500/30 hover:bg-blue-700 transition-all border border-blue-500 active:scale-95 whitespace-nowrap"
               >
-                <Download className="w-5 h-5" />
+                <Download className="w-3.5 h-3.5" />
+                <span>INSTALL APP</span>
               </button>
             )}
             <button 
               onClick={toggleDarkMode}
-              className="hidden md:block p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
             >
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -452,8 +461,16 @@ export default function App() {
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
               Offline support is active. Search results are cached. Install to home screen for an app-like experience.
             </p>
-            <button className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-900 text-xs font-bold rounded-xl transition-colors">
-              INSTALL APP
+            <button 
+              onClick={handleInstallClick}
+              disabled={!deferredPrompt}
+              className={`w-full py-2.5 text-xs font-bold rounded-xl transition-all ${
+                deferredPrompt 
+                ? "bg-white hover:bg-slate-50 text-slate-900 shadow-lg shadow-white/5" 
+                : "bg-slate-800 text-slate-600 cursor-not-allowed"
+              }`}
+            >
+              {deferredPrompt ? "INSTALL APP NOW" : "APP READY FOR OFFLINE"}
             </button>
           </div>
         </aside>
