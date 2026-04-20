@@ -18,6 +18,13 @@ import {
   Eye,
   Wifi,
   WifiOff,
+  Printer,
+  Presentation,
+  StickyNote,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  MonitorPlay,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
@@ -43,13 +50,22 @@ export default function App() {
   const [highContrast, setHighContrast] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [handsFree, setHandsFree] = useState(false);
+  const [seniorMode, setSeniorMode] = useState(false);
+  const [lectureMode, setLectureMode] = useState(false);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [wordOfTheDay, setWordOfTheDay] = useState<DictionaryEntry | null>(null);
 
   // Initialize from LocalStorage
   useEffect(() => {
     const savedFontSize = localStorage.getItem('vishwakosha_fontsize');
     const savedContrast = localStorage.getItem('vishwakosha_contrast');
+    const savedSenior = localStorage.getItem('vishwakosha_seniormode');
+    const savedNotes = localStorage.getItem('vishwakosha_notes');
+    
     if (savedFontSize) setFontSize(parseFloat(savedFontSize));
     if (savedContrast === 'true') setHighContrast(true);
+    if (savedSenior === 'true') setSeniorMode(true);
+    if (savedNotes) setNotes(JSON.parse(savedNotes));
     
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -123,6 +139,16 @@ export default function App() {
     setDarkMode(newMode);
     document.documentElement.classList.toggle('dark');
     localStorage.setItem('vishwakosha_theme', newMode ? 'dark' : 'light');
+  };
+
+  const saveNote = (word: string, note: string) => {
+    const newNotes = { ...notes, [word.toLowerCase()]: note };
+    setNotes(newNotes);
+    localStorage.setItem('vishwakosha_notes', JSON.stringify(newNotes));
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const handleSearch = async (wordToSearch: string) => {
@@ -232,8 +258,75 @@ export default function App() {
         ${highContrast ? 'bg-black text-yellow-400' : 'bg-[#f8fafc] text-[#1e293b] dark:bg-[#0f172a] dark:text-[#f1f5f9]'}`}
       style={{ fontSize: `${fontSize}rem` }}
     >
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; color: black !important; font-size: 12pt; }
+          .print-content { display: block !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }
+          .card { border: 1px solid #ccc !important; box-shadow: none !important; }
+        }
+      `}} />
+
+      {/* Presentation Mode Overlay */}
+      <AnimatePresence>
+        {lectureMode && entry && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-white dark:bg-slate-950 flex flex-col p-10 md:p-20 overflow-y-auto"
+          >
+            <button 
+              onClick={() => setLectureMode(false)}
+              className="absolute top-8 right-8 p-3 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-red-500 hover:text-white transition-all"
+            >
+              <Minimize2 className="w-8 h-8" />
+            </button>
+
+            <div className="max-w-4xl mx-auto w-full space-y-12">
+              <header className="border-b border-slate-200 dark:border-slate-800 pb-8">
+                <h1 className="text-7xl font-bold text-slate-900 dark:text-white mb-4 capitalize">
+                  {entry.word}
+                </h1>
+                <div className="flex gap-4">
+                  <button onClick={() => speak(entry.word, 'en-US')} className="p-4 bg-blue-600 text-white rounded-2xl flex items-center gap-3 text-2xl font-bold">
+                    <Volume2 className="w-8 h-8" /> Pronounce
+                  </button>
+                </div>
+              </header>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-16">
+                <div className="space-y-6">
+                  <h2 className="text-3xl font-bold text-blue-600 uppercase tracking-widest">English Definition</h2>
+                  <p className="text-4xl leading-snug text-slate-700 dark:text-slate-300">
+                    {entry.english?.extract}
+                  </p>
+                </div>
+                <div className="space-y-6">
+                  <h2 className="text-3xl font-bold text-emerald-600 uppercase tracking-widest">ಕನ್ನಡ ಅರ್ಥ (Kannada)</h2>
+                  <p className="text-4xl leading-snug text-slate-700 dark:text-slate-300">
+                    {entry.kannada?.extract}
+                  </p>
+                </div>
+              </section>
+
+              {notes[entry.word.toLowerCase()] && (
+                <section className="bg-amber-50 dark:bg-amber-900/10 p-10 rounded-3xl border border-amber-200 dark:border-amber-800/50">
+                  <h2 className="text-2xl font-bold text-amber-600 mb-4 flex items-center gap-3">
+                    <StickyNote className="w-6 h-6" /> Faculty Note
+                  </h2>
+                  <p className="text-3xl text-slate-700 dark:text-slate-300 italic">
+                    {notes[entry.word.toLowerCase()]}
+                  </p>
+                </section>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
-      <header className={`sticky top-0 z-50 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b backdrop-blur-sm shrink-0 gap-4
+      <header className={`sticky top-0 z-50 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b backdrop-blur-sm shrink-0 gap-4 no-print
         ${highContrast ? 'bg-black border-yellow-400 border-2' : 'border-slate-200 bg-white/95 dark:bg-slate-900/95 dark:border-slate-800'}`}>
         <div className="flex items-center justify-between w-full md:w-auto">
           <div className="flex items-center gap-2">
@@ -391,6 +484,21 @@ export default function App() {
                       <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${handsFree ? 'translate-x-5' : ''}`} />
                     </button>
                   </div>
+
+                  {/* Senior Mode */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium flex items-center gap-2"><MonitorPlay className="w-4 h-4" /> Senior Faculty Mode</span>
+                    <button 
+                      onClick={() => {
+                        const val = !seniorMode;
+                        setSeniorMode(val);
+                        localStorage.setItem('vishwakosha_seniormode', val.toString());
+                      }}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${seniorMode ? 'bg-orange-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${seniorMode ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
                 </div>
                 
                 <p className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 italic text-center">
@@ -420,9 +528,31 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 grid grid-cols-12 gap-6 p-4 md:p-8 overflow-y-auto">
+      <main className={`flex-1 grid grid-cols-12 gap-6 p-4 md:p-8 overflow-y-auto ${lectureMode ? 'hidden' : ''}`}>
         {/* Left Column: Result & Extras */}
-        <section className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+        <section className={`col-span-12 flex flex-col gap-6 ${seniorMode && !entry ? 'lg:col-span-12 items-center justify-center min-h-[60vh]' : 'lg:col-span-8'}`}>
+          {!entry && (
+            <div className={`max-w-2xl w-full space-y-8 ${seniorMode ? 'text-center' : ''}`}>
+              <div className="p-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2rem] text-white shadow-xl shadow-blue-500/10">
+                <h2 className="text-3xl font-bold mb-4">Welcome to VishwaKosha</h2>
+                <p className="text-blue-100 text-lg leading-relaxed">
+                  Search for any technical term to see its meaning in English and Kannada. Everything is saved for offline use.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  {['Algorithm', 'Encryption', 'Processor', 'Compiler'].map(word => (
+                    <button 
+                      key={word}
+                      onClick={() => handleSearch(word)}
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-medium transition-colors backdrop-blur-md"
+                    >
+                      Search "{word}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Hero Result Card */}
           <AnimatePresence mode="wait">
             {entry ? (
@@ -468,7 +598,22 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div className="flex gap-4 mb-6 no-print">
+                   <button 
+                     onClick={() => setLectureMode(true)}
+                     className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-900/30 text-xs font-bold hover:bg-indigo-100 transition-colors"
+                   >
+                     <Presentation className="w-4 h-4" /> LECTURE MODE
+                   </button>
+                   <button 
+                     onClick={handlePrint}
+                     className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors"
+                   >
+                     <Printer className="w-4 h-4" /> PRINT DEFINITION
+                   </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 print-content">
                   {/* English Section */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
@@ -501,7 +646,7 @@ export default function App() {
                            <span className="text-[10px] font-bold uppercase text-slate-400">Encyclopedia Insight</span>
                            <Volume2 
                              className="w-3.5 h-3.5 text-blue-500 cursor-pointer hover:scale-110 transition-transform" 
-                             onClick={() => speak(entry.kannada?.extract || '', 'kn-IN')} 
+                           onClick={() => speak(entry.kannada?.extract || '', 'kn-IN')} 
                            />
                         </div>
                         <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -512,6 +657,21 @@ export default function App() {
                       <p className="text-slate-400 text-sm italic">ಕನ್ನಡ ಅರ್ಥ ಲಭ್ಯವಿಲ್ಲ (Meaning not available).</p>
                     )}
                   </div>
+                </div>
+
+                {/* Personal Notes Section */}
+                <div className="mt-10 pt-8 border-t border-slate-100 dark:border-slate-800 no-print">
+                   <div className="flex items-center gap-2 mb-4">
+                      <StickyNote className="w-5 h-5 text-amber-500" />
+                      <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400">Personal Study Notes</h3>
+                   </div>
+                   <textarea 
+                     value={notes[entry.word.toLowerCase()] || ''}
+                     onChange={(e) => saveNote(entry.word, e.target.value)}
+                     placeholder="Add your own notes or lecture reminders here..."
+                     className="w-full h-32 p-4 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all placeholder:text-amber-400/50"
+                   />
+                   <p className="text-[10px] text-amber-600/60 mt-2 italic px-2">Notes are saved locally on this device.</p>
                 </div>
               </motion.div>
             ) : (
@@ -569,7 +729,7 @@ export default function App() {
         </section>
 
         {/* Right Column: Sidebar */}
-        <aside className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+        <aside className={`col-span-12 lg:col-span-4 flex flex-col gap-6 no-print ${seniorMode && !entry ? 'hidden' : ''}`}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Recent History</h3>
