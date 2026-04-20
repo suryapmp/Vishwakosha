@@ -11,6 +11,13 @@ import {
   Download,
   BookOpen,
   Share2,
+  Mic,
+  MicOff,
+  Settings,
+  Type,
+  Eye,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchWikipediaSummary, fetchSuggestions } from './lib/wikipedia';
@@ -30,9 +37,25 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [fontSize, setFontSize] = useState(1); // 1 = 100%, 1.25 = 125%, etc.
+  const [highContrast, setHighContrast] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [handsFree, setHandsFree] = useState(false);
 
   // Initialize from LocalStorage
   useEffect(() => {
+    const savedFontSize = localStorage.getItem('vishwakosha_fontsize');
+    const savedContrast = localStorage.getItem('vishwakosha_contrast');
+    if (savedFontSize) setFontSize(parseFloat(savedFontSize));
+    if (savedContrast === 'true') setHighContrast(true);
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const savedHistory = localStorage.getItem('vishwakosha_history');
     const savedFavorites = localStorage.getItem('vishwakosha_favorites');
     const savedTheme = localStorage.getItem('vishwakosha_theme');
@@ -50,8 +73,37 @@ export default function App() {
       setDeferredPrompt(e);
     };
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const startVoiceSearch = () => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in this browser. Please try Chrome or Edge.");
+      return;
+    }
+    
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuery(transcript);
+      handleSearch(transcript);
+    };
+
+    recognition.start();
+  };
 
   // Fetch suggestions when query changes
   useEffect(() => {
@@ -87,10 +139,7 @@ export default function App() {
         fetchWikipediaSummary(word, 'kn'),
       ]);
 
-      if (!enResult && !knResult) {
-        setError('Term definition not found.');
-        setEntry(null);
-      } else {
+      if (enResult || knResult) {
         const newEntry: DictionaryEntry = {
           word,
           english: enResult || undefined,
@@ -98,10 +147,19 @@ export default function App() {
           timestamp: Date.now(),
         };
         setEntry(newEntry);
+
+        if (handsFree) {
+          const textToRead = knResult?.extract || enResult?.extract || "Definition not found.";
+          const lang = knResult ? 'kn-IN' : 'en-US';
+          speak(textToRead, lang);
+        }
         
         const updatedHistory = [newEntry, ...history.filter(h => h.word.toLowerCase() !== word.toLowerCase())].slice(0, MAX_HISTORY);
         setHistory(updatedHistory);
         localStorage.setItem('vishwakosha_history', JSON.stringify(updatedHistory));
+      } else {
+        setError('Term definition not found.');
+        setEntry(null);
       }
     } catch (err) {
       setError('An error occurred while fetching data.');
@@ -169,20 +227,42 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f8fafc] text-[#1e293b] dark:bg-[#0f172a] dark:text-[#f1f5f9] font-sans">
+    <div 
+      className={`flex flex-col min-h-screen font-sans transition-all duration-300
+        ${highContrast ? 'bg-black text-yellow-400' : 'bg-[#f8fafc] text-[#1e293b] dark:bg-[#0f172a] dark:text-[#f1f5f9]'}`}
+      style={{ fontSize: `${fontSize}rem` }}
+    >
       {/* Header */}
-      <header className="sticky top-0 z-50 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b border-slate-200 bg-white/95 dark:bg-slate-900/95 dark:border-slate-800 backdrop-blur-sm shrink-0 gap-4">
+      <header className={`sticky top-0 z-50 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b backdrop-blur-sm shrink-0 gap-4
+        ${highContrast ? 'bg-black border-yellow-400 border-2' : 'border-slate-200 bg-white/95 dark:bg-slate-900/95 dark:border-slate-800'}`}>
         <div className="flex items-center justify-between w-full md:w-auto">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-sm shadow-blue-500/20">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${highContrast ? 'bg-yellow-400 text-black' : 'bg-blue-600 text-white shadow-blue-500/20'}`}>
               <BookOpen className="w-5 h-5" />
             </div>
             <h1 className="text-lg md:text-xl font-semibold tracking-tight">
               VishwaKosha <span className="text-slate-400 font-normal text-xs md:text-sm ml-1 select-none">EN-KN</span>
             </h1>
+            <div className="ml-2">
+              {isOnline ? (
+                <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase">
+                  <Wifi className="w-3 h-3" /> Online
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-[10px] text-orange-500 font-bold uppercase animate-pulse">
+                  <WifiOff className="w-3 h-3" /> Offline Ready
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="flex md:hidden items-center gap-2">
+              <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className={`p-2 rounded-full transition-colors ${highContrast ? 'text-yellow-400 border border-yellow-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
+              >
+                <Settings className="w-5 h-5" />
+              </button>
              {deferredPrompt && (
                 <button 
                   onClick={handleInstallClick}
@@ -202,43 +282,41 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto relative">
-          <div className="flex flex-1 items-center bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 border border-slate-200 dark:border-slate-700 transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
+          <div className={`flex flex-1 items-center rounded-full px-4 py-2 border transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500
+            ${highContrast ? 'bg-black border-yellow-400' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
             <input 
               type="text" 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => setShowSuggestions(true)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch(query)}
-              placeholder="Search terms..." 
+              placeholder="Speak or search terms..." 
               className="bg-transparent border-none focus:outline-none text-sm w-full md:w-64 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             <button 
+              onClick={startVoiceSearch}
+              className={`mr-2 transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-400 hover:text-blue-500'}`}
+              title="Voice Search"
+            >
+              {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+            </button>
+            <button 
               onClick={() => handleSearch(query)}
               disabled={loading}
-              className="ml-2 text-slate-500 hover:text-blue-500 transition-colors"
+              className="text-slate-500 hover:text-blue-500 transition-colors"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             </button>
           </div>
 
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 overflow-hidden py-2">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    setQuery(s);
-                    handleSearch(s);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          
           <div className="hidden md:flex items-center gap-2">
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
+              title="Accessibility Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
             {deferredPrompt && (
               <button 
                 onClick={handleInstallClick}
@@ -255,6 +333,89 @@ export default function App() {
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
           </div>
+
+          <AnimatePresence>
+            {showSettings && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className={`absolute top-full right-0 mt-4 p-6 rounded-2xl shadow-2xl z-[100] w-72 border
+                  ${highContrast ? 'bg-black border-yellow-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}
+              >
+                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
+                  <Settings className="w-4 h-4" /> Student Support
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* Font Size */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium flex items-center gap-2"><Type className="w-4 h-4" /> Font Size</span>
+                      <span className="text-xs font-bold text-blue-500">{Math.round(fontSize * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" min="0.8" max="1.5" step="0.1" 
+                      value={fontSize} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setFontSize(val);
+                        localStorage.setItem('vishwakosha_fontsize', val.toString());
+                      }}
+                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
+                  </div>
+
+                  {/* Contrast */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium flex items-center gap-2"><Eye className="w-4 h-4" /> High Contrast</span>
+                    <button 
+                      onClick={() => {
+                        const val = !highContrast;
+                        setHighContrast(val);
+                        localStorage.setItem('vishwakosha_contrast', val.toString());
+                      }}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${highContrast ? 'bg-yellow-400' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${highContrast ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Hands Free */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium flex items-center gap-2"><Volume2 className="w-4 h-4" /> Auto-Read (Hands-Free)</span>
+                    <button 
+                      onClick={() => setHandsFree(!handsFree)}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${handsFree ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${handsFree ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+                
+                <p className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 italic text-center">
+                  Designed for inclusive technical education.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-[60] overflow-hidden py-2 max-w-lg mx-auto md:max-w-none">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setQuery(s);
+                    handleSearch(s);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 

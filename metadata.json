@@ -1,6 +1,6 @@
 {
   "name": "VishwaKosha: Multilingual Tech Dictionary",
-  "description": "A technical dictionary supporting English and Kannada with Wikipedia integration, pronunciation, and offline support.",
-  "requestFramePermissions": [],
+  "description": "An offline-first, highly accessible technical dictionary for students in rural areas and those with disabilities. Supports voice navigation and PWA installation.",
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": []
 }
