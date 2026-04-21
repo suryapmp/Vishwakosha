@@ -44,6 +44,7 @@ import { searchOfflineDB, OFFLINE_DB } from './lib/offline-db';
 import { DictionaryEntry } from './types';
 
 const MAX_HISTORY = 50;
+const APP_ICON = "https://cdn-icons-png.flaticon.com/512/3593/3593963.png";
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -75,6 +76,7 @@ export default function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
   const [showInstallPopup, setShowInstallPopup] = useState(false);
+  const [showSafariGuide, setShowSafariGuide] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentSpeakingText, setCurrentSpeakingText] = useState<string | null>(null);
@@ -185,12 +187,17 @@ export default function App() {
       e.preventDefault();
       setDeferredPrompt(e);
       
-      // Show popup if not installed and hasn't been dismissed this session
       const hasDismissed = sessionStorage.getItem('vishwakosha_install_dismissed');
       if (!isAppInstalled && !hasDismissed) {
         setShowInstallPopup(true);
       }
     };
+    
+    // Auto-show Safari guide for iOS users if not on standalone
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    if (isIOS && !isAppInstalled && !sessionStorage.getItem('vishwakosha_install_dismissed')) {
+      setShowSafariGuide(true);
+    }
     window.addEventListener('beforeinstallprompt', handler);
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
@@ -554,23 +561,35 @@ export default function App() {
       <header className={`sticky top-0 z-50 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b backdrop-blur-sm shrink-0 gap-4 no-print
         ${highContrast ? 'bg-black border-yellow-400 border-2' : 'border-slate-200 bg-white/95 dark:bg-slate-900/95 dark:border-slate-800'}`}>
         <div className="flex items-center justify-between w-full md:w-auto">
-          <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${highContrast ? 'bg-yellow-400 text-black' : 'bg-blue-600 text-white shadow-blue-500/20'}`}>
-              <BookOpen className="w-5 h-5" />
+          <div 
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => {
+              setEntry(null);
+              setQuery('');
+              setSuggestions([]);
+            }}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm transition-all group-hover:scale-105 active:scale-95 overflow-hidden ${highContrast ? 'bg-yellow-400 text-black border-2 border-yellow-500' : 'bg-blue-600 text-white shadow-blue-500/20'}`}>
+              <img src={APP_ICON} alt="Icon" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-lg md:text-xl font-semibold tracking-tight">
-              VishwaKosha <span className="text-slate-400 font-normal text-xs md:text-sm ml-1 select-none">EN-KN</span>
-            </h1>
-            <div className="ml-2">
-              {isOnline ? (
-                <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold uppercase">
-                  <Wifi className="w-3 h-3" /> Online
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 text-[10px] text-orange-500 font-bold uppercase animate-pulse">
-                  <WifiOff className="w-3 h-3" /> Offline Ready
-                </div>
-              )}
+            <div>
+              <h1 className="text-lg md:text-xl font-black tracking-tighter leading-none">
+                VishwaKosha
+              </h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {isOnline ? (
+                  <div className="flex items-center gap-1 text-[9px] text-emerald-500 font-black uppercase tracking-widest">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                    Live
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-[9px] text-amber-500 font-black uppercase tracking-widest animate-pulse">
+                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                     Offline
+                  </div>
+                )}
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest border-l border-slate-200 dark:border-slate-800 pl-1.5">EN-KN</span>
+              </div>
             </div>
           </div>
           
@@ -814,23 +833,106 @@ export default function App() {
         {/* Left Column: Result & Extras */}
         <section className={`col-span-12 flex flex-col gap-6 ${seniorMode && !entry ? 'lg:col-span-12 items-center justify-center min-h-[60vh]' : 'lg:col-span-8'}`}>
           {!entry && !quizMode && (
-            <div className={`max-w-2xl w-full space-y-8 ${seniorMode ? 'text-center' : ''}`}>
-              <div className="p-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2rem] text-white shadow-xl shadow-blue-500/10">
-                <h2 className="text-3xl font-bold mb-4">Welcome to VishwaKosha</h2>
-                <p className="text-blue-100 text-lg leading-relaxed">
-                  Search for any technical term or scan a textbook page to see meanings in English and Kannada.
-                </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  {['Algorithm', 'Encryption', 'Processor', 'Compiler'].map(word => (
-                    <button 
-                      key={word}
-                      onClick={() => handleSearch(word)}
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-medium transition-colors backdrop-blur-md"
-                    >
-                      Search "{word}"
-                    </button>
-                  ))}
-                </div>
+            <div className={`w-full space-y-8 ${seniorMode ? 'text-center' : ''}`}>
+              {wordOfTheDay && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-8 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[3rem] text-white shadow-2xl shadow-blue-500/30 relative overflow-hidden group cursor-pointer border border-white/10"
+                  onClick={() => handleSearch(wordOfTheDay.word)}
+                >
+                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                     <Star className="w-32 h-32" />
+                  </div>
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30 backdrop-blur-md">
+                        <img src={APP_ICON} alt="Icon" className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.2em] opacity-60">Insight of the Day</span>
+                        <span className="block text-xs font-black uppercase tracking-widest">Featured Technical Concept</span>
+                      </div>
+                    </div>
+                    
+                    <h2 className="text-6xl font-black mb-6 tracking-tighter">
+                      {wordOfTheDay.word}
+                    </h2>
+                    
+                    <div className="flex items-center gap-3 text-blue-100 font-bold mb-8">
+                      <div className="px-3 py-1 bg-white/10 rounded-lg text-lg border border-white/10">
+                        {wordOfTheDay.kannada?.title}
+                      </div>
+                    </div>
+                    
+                    <p className="text-blue-50/90 max-w-2xl text-xl leading-relaxed font-medium">
+                      {wordOfTheDay.kannada?.extract}
+                    </p>
+
+                    <div className="mt-10 flex items-center gap-6">
+                      <button 
+                        className="px-8 py-4 bg-white text-blue-700 rounded-2xl font-black text-sm shadow-2xl hover:scale-105 transition-all active:scale-95 uppercase tracking-widest"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSearch(wordOfTheDay.word);
+                        }}
+                      >
+                        Learn More
+                      </button>
+                      <button 
+                        className="p-4 bg-blue-500/20 hover:bg-blue-500/40 rounded-2xl text-white backdrop-blur-md border border-white/20 transition-all active:scale-95"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const textToRead = `${wordOfTheDay.word}. ${wordOfTheDay.kannada?.extract || ''}`;
+                          speak(textToRead, 'en-US');
+                        }}
+                      >
+                        {currentSpeakingText === (`${wordOfTheDay.word}. ${wordOfTheDay.kannada?.extract || ''}`) && isSpeaking ? (
+                          isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />
+                        ) : (
+                          <Volume2 className="w-6 h-6" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 {/* Welcome Card */}
+                 <div className="p-8 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 flex flex-col justify-center space-y-4">
+                    <div className="w-14 h-14 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-600">
+                      <Search className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h3 className="text-slate-900 dark:text-white font-bold text-lg">Search for a term</h3>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm">VishwaKosha supports English & Kannada technical concepts. Instant reverse-lookup for technical translations.</p>
+                    </div>
+                 </div>
+
+                 <div className="p-8 bg-blue-600 rounded-[2.5rem] text-white flex flex-col justify-center space-y-4 shadow-xl shadow-blue-500/20 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                       <Languages className="w-20 h-20" />
+                    </div>
+                    <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30">
+                      <Languages className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">Quick Start</h3>
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {['Algorithm', 'Processor', 'Encapsulation'].map(word => (
+                          <button 
+                            key={word}
+                            onClick={() => handleSearch(word)}
+                            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors backdrop-blur-md"
+                          >
+                            {word}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                 </div>
               </div>
             </div>
           )}
@@ -944,7 +1046,6 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Hero Result Card */}
           <AnimatePresence mode="wait">
             {entry ? (
               <motion.div
@@ -952,13 +1053,18 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm shrink-0"
+                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-xl shadow-slate-200/20 dark:shadow-none shrink-0"
               >
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-1 capitalize leading-tight">
-                      {entry.word}
-                    </h2>
+                    <div className="flex items-center gap-3 mb-2">
+                       <button onClick={() => setEntry(null)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+                          <ChevronLeft className="w-5 h-5" />
+                       </button>
+                       <h2 className="text-4xl font-black text-slate-900 dark:text-white capitalize leading-tight">
+                         {entry.word}
+                       </h2>
+                    </div>
                     {entry.isOffline && (
                       <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[8px] font-bold uppercase tracking-wider mb-2">
                         Offline Data
@@ -1107,78 +1213,7 @@ export default function App() {
                    <p className="text-[10px] text-amber-600/60 mt-2 italic px-2">Notes are saved locally on this device.</p>
                 </div>
               </motion.div>
-            ) : (
-              <div className="space-y-6">
-                {wordOfTheDay && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-8 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] text-white shadow-xl shadow-blue-500/20 relative overflow-hidden group cursor-pointer"
-                    onClick={() => handleSearch(wordOfTheDay.word)}
-                  >
-                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-                       <Star className="w-32 h-32" />
-                    </div>
-                    
-                    <div className="relative z-10">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/30 backdrop-blur-md">Featured</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Word of the Day</span>
-                      </div>
-                      
-                      <h2 className="text-5xl font-black mb-4 tracking-tighter">
-                        {wordOfTheDay.word}
-                      </h2>
-                      
-                      <div className="flex items-center gap-2 text-blue-100 font-bold mb-6">
-                        <ArrowRight className="w-4 h-4" />
-                        <span className="text-xl capitalize">{wordOfTheDay.kannada?.title}</span>
-                      </div>
-                      
-                      <p className="text-blue-50/80 line-clamp-2 max-w-xl text-lg leading-relaxed">
-                        {wordOfTheDay.kannada?.extract}
-                      </p>
-
-                      <div className="mt-8 flex items-center gap-4">
-                        <button 
-                          className="px-6 py-3 bg-white text-blue-600 rounded-2xl font-bold text-sm shadow-lg hover:shadow-white/20 transition-all active:scale-95"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSearch(wordOfTheDay.word);
-                          }}
-                        >
-                          Learn More
-                        </button>
-                        <button 
-                          className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white backdrop-blur-md border border-white/20 transition-all active:scale-95"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const textToRead = `${wordOfTheDay.word}. ${wordOfTheDay.kannada?.extract || ''}`;
-                            speak(textToRead, 'en-US');
-                          }}
-                        >
-                          {currentSpeakingText === (`${wordOfTheDay.word}. ${wordOfTheDay.kannada?.extract || ''}`) && isSpeaking ? (
-                            isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />
-                          ) : (
-                            <Volume2 className="w-5 h-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                <div className="h-full min-h-[300px] flex items-center justify-center p-8 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 border-dashed">
-                  <div className="text-center space-y-3">
-                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-300 dark:text-slate-600">
-                      <Search className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-slate-900 dark:text-slate-200 font-medium">Search for a term</h3>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs">Look up technical definitions and translations across English and Kannada.</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            ) : null}
           </AnimatePresence>
 
           {/* Secondary Info Grid */}
@@ -1308,7 +1343,7 @@ export default function App() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 p-2">
-                  <img src="https://cdn-icons-png.flaticon.com/512/3593/3593963.png" alt="App Icon" className="w-full h-full object-contain" />
+                  <img src={APP_ICON} alt="App Icon" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">PWA System</h4>
@@ -1397,7 +1432,7 @@ export default function App() {
               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
               
               <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-3xl mx-auto mb-6 flex items-center justify-center border border-blue-100 dark:border-blue-800 p-4">
-                <img src="https://cdn-icons-png.flaticon.com/512/3593/3593963.png" alt="VishwaKosha Icon" className="w-full h-full object-contain" />
+                <img src={APP_ICON} alt="VishwaKosha Icon" className="w-full h-full object-contain" />
               </div>
 
               <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Install VishwaKosha</h3>
@@ -1424,6 +1459,63 @@ export default function App() {
                 >
                   Maybe Later
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* iOS Safari Install Guide */}
+      <AnimatePresence>
+        {showSafariGuide && (
+          <div 
+            className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowSafariGuide(false);
+              sessionStorage.setItem('vishwakosha_install_dismissed', 'true');
+            }}
+          >
+            <motion.div 
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-slate-200 dark:border-slate-800 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => {
+                  setShowSafariGuide(false);
+                  sessionStorage.setItem('vishwakosha_install_dismissed', 'true');
+                }}
+                className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
+                   <img src={APP_ICON} className="w-10 h-10" alt="Icon" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">Add to Home Screen</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  For the best experience on Safari, tap the share icon below and select <strong>"Add to Home Screen"</strong>.
+                </p>
+                
+                <div className="flex items-center gap-4 pt-4 text-blue-600">
+                   <div className="flex flex-col items-center gap-1">
+                      <div className="p-2 bg-blue-50 rounded-lg">
+                        <Share2 className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold">1. Tap Share</span>
+                   </div>
+                   <div className="h-px w-8 bg-slate-200"></div>
+                   <div className="flex flex-col items-center gap-1">
+                      <div className="p-2 bg-blue-50 rounded-lg">
+                        <Download className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] font-bold">2. Add to Home</span>
+                   </div>
+                </div>
               </div>
             </motion.div>
           </div>
