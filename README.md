@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+📄 PDF Audit Process
+🚀 Overview
 
-# Run and deploy your AI Studio app
+The PDF Audit Process is a Python-based automation tool that scans folders containing PDF files, validates file naming conventions, extracts relevant information, and generates audit reports in CSV format.
 
-This contains everything you need to run your app locally.
+This tool helps automate manual verification tasks and improve document audit efficiency.
 
-View your app in AI Studio: https://ai.studio/apps/6d8017da-3e5d-46fd-93cb-3765c008a91f
+🔗 Testing URL
 
-## Run Locally
+You can test the application here:
 
-**Prerequisites:**  Node.js
+👉 https://dictionarytec.netlify.app/
 
+Try entering a technical word to test and verify the tool functionality.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+🧩 Features
+📂 Scan folders for PDF files
+📝 Validate file naming patterns
+🔍 Extract information from PDFs
+📊 Generate CSV audit reports
+⚡ Fast automated workflow
