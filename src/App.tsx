@@ -73,6 +73,7 @@ export default function App() {
   const [quizAnswer, setQuizAnswer] = useState('');
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentSpeakingText, setCurrentSpeakingText] = useState<string | null>(null);
@@ -85,6 +86,24 @@ export default function App() {
     const wordKey = keys[index];
     const offlineEntry = OFFLINE_DB[wordKey];
     setWordOfTheDay({ ...offlineEntry, timestamp: Date.now() });
+
+    // Global Notification for WOTD
+    const notifyWOTD = async () => {
+      const isActuallyEnabled = localStorage.getItem('vishwakosha_notifications') === 'true';
+      if (isActuallyEnabled && Notification.permission === 'granted') {
+        const lastNotifiedDate = localStorage.getItem('vishwakosha_last_wotd_date');
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        if (lastNotifiedDate !== todayStr) {
+          new Notification("VishwaKosha Word of the Day", {
+            body: `Today's technical term is "${offlineEntry.word}". Tap to learn its Kannada meaning!`,
+            icon: 'https://cdn-icons-png.flaticon.com/512/3593/3593963.png'
+          });
+          localStorage.setItem('vishwakosha_last_wotd_date', todayStr);
+        }
+      }
+    };
+    notifyWOTD();
   }, []);
 
   // Sync Dark Mode to DOM
@@ -104,9 +123,10 @@ export default function App() {
     onRegistered(r) {
       console.log('Service Worker Registered');
       if (r) {
+        // Automatic update check
         setInterval(() => {
           r.update();
-        }, 60 * 60 * 1000); // Check for updates every hour
+        }, 15 * 60 * 1000); // Check every 15 mins for student convenience
       }
     },
     onRegisterError(error) {
@@ -121,17 +141,24 @@ export default function App() {
 
   // Initialize from LocalStorage
   useEffect(() => {
+    // Check if app is installed
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true) {
+      setIsAppInstalled(true);
+    }
+
     const savedFontSize = localStorage.getItem('vishwakosha_fontsize');
     const savedContrast = localStorage.getItem('vishwakosha_contrast');
     const savedSenior = localStorage.getItem('vishwakosha_seniormode');
     const savedNotes = localStorage.getItem('vishwakosha_notes');
     const savedSpeed = localStorage.getItem('vishwakosha_speechspeed');
+    const savedNotifications = localStorage.getItem('vishwakosha_notifications');
     
     if (savedFontSize) setFontSize(parseFloat(savedFontSize));
     if (savedContrast === 'true') setHighContrast(true);
     if (savedSenior === 'true') setSeniorMode(true);
     if (savedNotes) setNotes(JSON.parse(savedNotes));
     if (savedSpeed) setSpeechSpeed(parseFloat(savedSpeed));
+    if (savedNotifications === 'true') setNotificationsEnabled(true);
     
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -225,11 +252,13 @@ export default function App() {
 
     if (Notification.permission === 'granted') {
       setNotificationsEnabled(true);
+      localStorage.setItem('vishwakosha_notifications', 'true');
       new Notification("VishwaKosha", { body: "Notifications are already enabled! We'll keep you updated." });
     } else {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         setNotificationsEnabled(true);
+        localStorage.setItem('vishwakosha_notifications', 'true');
         new Notification("VishwaKosha", { body: "Daily technical term alerts are now active!" });
       }
     }
@@ -1266,26 +1295,54 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-slate-900 dark:bg-black rounded-2xl p-6 text-white shrink-0 relative overflow-hidden group">
+          <div className="bg-slate-900 dark:bg-black rounded-[2rem] p-8 text-white shrink-0 relative overflow-hidden group border border-slate-800">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full translate-x-16 -translate-y-16"></div>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">PWA Status</h4>
-              <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 p-2">
+                  <img src="https://cdn-icons-png.flaticon.com/512/3593/3593963.png" alt="App Icon" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">PWA System</h4>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} shadow-[0_0_8px_rgba(34,197,94,0.4)]`}></div>
+                    <span className="text-[10px] text-slate-400 font-medium">Version: 2.1.0</span>
+                  </div>
+                </div>
+              </div>
+              {isAppInstalled && (
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold uppercase tracking-wider rounded-full border border-emerald-500/30">
+                  Installed
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              Offline support is active. Search results are cached. Install to home screen for an app-like experience.
+            
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              {isAppInstalled 
+                ? "Offline support is active. Search results are automatically cached for your convenience." 
+                : "Install VishwaKosha to your home screen for a seamless, lightning-fast app experience."}
             </p>
-            <button 
-              onClick={handleInstallClick}
-              disabled={!deferredPrompt}
-              className={`w-full py-2.5 text-xs font-bold rounded-xl transition-all ${
-                deferredPrompt 
-                ? "bg-white hover:bg-slate-50 text-slate-900 shadow-lg shadow-white/5" 
-                : "bg-slate-800 text-slate-600 cursor-not-allowed"
-              }`}
-            >
-              {deferredPrompt ? "INSTALL APP NOW" : "APP READY FOR OFFLINE"}
-            </button>
+
+            {!isAppInstalled && (
+              <button 
+                onClick={handleInstallClick}
+                disabled={!deferredPrompt}
+                className={`w-full py-3 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${
+                  deferredPrompt 
+                  ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 active:scale-95" 
+                  : "bg-slate-800 text-slate-600 cursor-not-allowed"
+                }`}
+              >
+                {deferredPrompt ? "Install App Now" : "System Ready"}
+              </button>
+            )}
+            
+            {isAppInstalled && (
+              <div className="flex items-center justify-center gap-2 p-3 bg-white/5 rounded-xl border border-white/5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">App is Standalone</span>
+              </div>
+            )}
           </div>
         </aside>
       </main>

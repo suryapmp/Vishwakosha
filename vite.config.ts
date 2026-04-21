@@ -11,7 +11,7 @@ export default defineConfig(({mode}) => {
       react(), 
       tailwindcss(),
       VitePWA({
-        registerType: 'prompt',
+        registerType: 'autoUpdate',
         injectRegister: 'auto',
         strategies: 'injectManifest',
         srcDir: 'src',
@@ -23,24 +23,24 @@ export default defineConfig(({mode}) => {
         manifest: {
           name: 'VishwaKosha',
           short_name: 'VishwaKosha',
-          description: 'Multilingual Technical Dictionary supporting English and Kannada.',
+          description: 'Official VishwaKosha: Multilingual Technical Dictionary for Students.',
           start_url: '/',
           display: 'standalone',
           background_color: '#ffffff',
           theme_color: '#2563eb',
           icons: [
             {
-              src: 'https://picsum.photos/192/192',
+              src: 'https://cdn-icons-png.flaticon.com/512/3593/3593963.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: 'https://picsum.photos/512/512',
+              src: 'https://cdn-icons-png.flaticon.com/512/3593/3593963.png',
               sizes: '512x512',
               type: 'image/png'
             },
             {
-              src: 'https://picsum.photos/512/512',
+              src: 'https://cdn-icons-png.flaticon.com/512/3593/3593963.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'
