@@ -74,6 +74,7 @@ export default function App() {
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
+  const [showInstallPopup, setShowInstallPopup] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentSpeakingText, setCurrentSpeakingText] = useState<string | null>(null);
@@ -183,6 +184,12 @@ export default function App() {
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      
+      // Show popup if not installed and hasn't been dismissed this session
+      const hasDismissed = sessionStorage.getItem('vishwakosha_install_dismissed');
+      if (!isAppInstalled && !hasDismissed) {
+        setShowInstallPopup(true);
+      }
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => {
@@ -584,10 +591,11 @@ export default function App() {
              {deferredPrompt && (
                 <button 
                   onClick={handleInstallClick}
-                  className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-full transition-colors"
-                  title="Install App"
+                  className="flex items-center gap-2 p-2 px-3 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-full transition-all border border-blue-100 dark:border-blue-900/30 animate-pulse"
+                  title="Install VishwaKosha"
                 >
-                  <Download className="w-5 h-5" />
+                  <Download className="w-4 h-4" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Ready to Install</span>
                 </button>
              )}
              <button 
@@ -1333,7 +1341,7 @@ export default function App() {
                   : "bg-slate-800 text-slate-600 cursor-not-allowed"
                 }`}
               >
-                {deferredPrompt ? "Install App Now" : "System Ready"}
+                {deferredPrompt ? "Install App Now" : "System Ready to Install"}
               </button>
             )}
             
@@ -1368,6 +1376,59 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Install App Launch Popup */}
+      <AnimatePresence>
+        {showInstallPopup && !isAppInstalled && deferredPrompt && (
+          <div 
+            className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowInstallPopup(false);
+              sessionStorage.setItem('vishwakosha_install_dismissed', 'true');
+            }}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+              
+              <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-3xl mx-auto mb-6 flex items-center justify-center border border-blue-100 dark:border-blue-800 p-4">
+                <img src="https://cdn-icons-png.flaticon.com/512/3593/3593963.png" alt="VishwaKosha Icon" className="w-full h-full object-contain" />
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Install VishwaKosha</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+                Add to your home screen for instant offline access and a faster, native app experience.
+              </p>
+
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    handleInstallClick();
+                    setShowInstallPopup(false);
+                  }}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-500/20 transition-all active:scale-95"
+                >
+                  Download App Now
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowInstallPopup(false);
+                    sessionStorage.setItem('vishwakosha_install_dismissed', 'true');
+                  }}
+                  className="w-full py-4 text-slate-400 dark:text-slate-500 font-bold text-sm hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                >
+                  Maybe Later
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Error Toast */}
       {error && (
