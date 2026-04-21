@@ -32,13 +32,15 @@ import {
   Copy,
   Languages,
   ArrowRight,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Tesseract from 'tesseract.js';
 import { fetchWikipediaSummary, fetchSuggestions, isKannada } from './lib/wikipedia';
+import { searchOfflineDB } from './lib/offline-db';
 import { DictionaryEntry } from './types';
 
-const MAX_HISTORY = 10;
+const MAX_HISTORY = 50;
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -67,6 +69,15 @@ export default function App() {
   const [quizMode, setQuizMode] = useState(false);
   const [quizAnswer, setQuizAnswer] = useState('');
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
+
+  // Sync Dark Mode to DOM
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const {
     offlineReady: [offlineReady, setOfflineReady],
@@ -97,11 +108,13 @@ export default function App() {
     const savedContrast = localStorage.getItem('vishwakosha_contrast');
     const savedSenior = localStorage.getItem('vishwakosha_seniormode');
     const savedNotes = localStorage.getItem('vishwakosha_notes');
+    const savedSpeed = localStorage.getItem('vishwakosha_speechspeed');
     
     if (savedFontSize) setFontSize(parseFloat(savedFontSize));
     if (savedContrast === 'true') setHighContrast(true);
     if (savedSenior === 'true') setSeniorMode(true);
     if (savedNotes) setNotes(JSON.parse(savedNotes));
+    if (savedSpeed) setSpeechSpeed(parseFloat(savedSpeed));
     
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -114,9 +127,12 @@ export default function App() {
 
     if (savedHistory) setHistory(JSON.parse(savedHistory));
     if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
-    if (savedTheme === 'dark') {
-      setDarkMode(true);
-      document.documentElement.classList.add('dark');
+    if (savedTheme) {
+      if (savedTheme === 'dark') setDarkMode(true);
+    } else {
+      // Default to system preference if no saved setting
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) setDarkMode(true);
     }
 
     // PWA Install Prompt Listener
@@ -171,10 +187,11 @@ export default function App() {
   }, [query]);
 
   const toggleDarkMode = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('vishwakosha_theme', newMode ? 'dark' : 'light');
+    setDarkMode(prev => {
+      const newVal = !prev;
+      localStorage.setItem('vishwakosha_theme', newVal ? 'dark' : 'light');
+      return newVal;
+    });
   };
 
   const saveNote = (word: string, note: string) => {
@@ -194,6 +211,25 @@ export default function App() {
     setError(null);
     setShowSuggestions(false);
     const word = wordToSearch.trim();
+    
+    // STEP 1: Check Offline DB first
+    const offlineMatch = searchOfflineDB(word);
+    if (offlineMatch) {
+      const newEntry: DictionaryEntry = { ...offlineMatch, timestamp: Date.now(), isOffline: true };
+      setEntry(newEntry);
+      
+      const updatedHistory = [newEntry, ...history.filter(h => h.word.toLowerCase() !== word.toLowerCase())].slice(0, MAX_HISTORY);
+      setHistory(updatedHistory);
+      localStorage.setItem('vishwakosha_history', JSON.stringify(updatedHistory));
+      
+      if (handsFree) {
+        const textToRead = newEntry.kannada?.extract || newEntry.english?.extract || "Found in offline dictionary.";
+        speak(textToRead, isKannada(word) ? 'kn-IN' : 'en-US');
+      }
+      
+      setLoading(false);
+      return;
+    }
 
     try {
       let enResult: any = null;
@@ -238,22 +274,36 @@ export default function App() {
     }
   };
 
+  const [detectedTerms, setDetectedTerms] = useState<string[]>([]);
+
   const handleOCR = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsScanning(true);
     setError(null);
+    setDetectedTerms([]);
+    
     try {
       const { data: { text } } = await Tesseract.recognize(file, 'eng');
-      // Look for the first meaningful word in the OCR text
-      const cleanText = text.replace(/[^a-zA-Z ]/g, "").trim().split(/\s+/)[0];
-      if (cleanText.length > 2) {
-        setQuery(cleanText);
-        handleSearch(cleanText);
-        setShowScanner(false);
+      
+      // Stopwords to filter out
+      const stopwords = new Set(['the', 'and', 'for', 'that', 'with', 'this', 'from', 'your', 'have', 'been', 'which', 'their', 'when', 'what', 'some', 'than']);
+
+      // Clean and find potential technical terms (words > 2 chars, letters only)
+      const words = text
+        .toLowerCase()
+        .split(/\s+/)
+        .map(w => w.replace(/[^a-z]/g, "").trim())
+        .filter(w => w.length > 2 && !stopwords.has(w));
+      
+      // Remove duplicates and common words
+      const uniqueWords = Array.from(new Set(words)).slice(0, 15);
+      
+      if (uniqueWords.length > 0) {
+        setDetectedTerms(uniqueWords);
       } else {
-        setError("Could not identify a clear technical term in this image.");
+        setError("Could not identify any clear technical terms in this image.");
       }
     } catch (err) {
       setError("OCR Scan failed. Please try a clearer image.");
@@ -296,6 +346,11 @@ export default function App() {
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem('vishwakosha_history');
+  };
+
+  const clearFavorites = () => {
+    setFavorites([]);
+    localStorage.removeItem('vishwakosha_favorites');
   };
 
   const handleShare = async (e: DictionaryEntry) => {
@@ -557,14 +612,34 @@ export default function App() {
                   </div>
 
                   {/* Hands Free */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium flex items-center gap-2"><Volume2 className="w-4 h-4" /> Auto-Read (Hands-Free)</span>
-                    <button 
-                      onClick={() => setHandsFree(!handsFree)}
-                      className={`w-10 h-5 rounded-full transition-colors relative ${handsFree ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
-                    >
-                      <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${handsFree ? 'translate-x-5' : ''}`} />
-                    </button>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium flex items-center gap-2"><Volume2 className="w-4 h-4" /> Auto-Read</span>
+                      <button 
+                        onClick={() => setHandsFree(!handsFree)}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${handsFree ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${handsFree ? 'translate-x-5' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Speech Speed */}
+                  <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium flex items-center gap-2"><Volume2 className="w-4 h-4" /> Speech Speed</span>
+                      <span className="text-xs font-bold text-blue-500">{speechSpeed}x</span>
+                    </div>
+                    <input 
+                      type="range" min="0.5" max="2" step="0.1" 
+                      value={speechSpeed} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setSpeechSpeed(val);
+                        localStorage.setItem('vishwakosha_speechspeed', val.toString());
+                      }}
+                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
                   </div>
 
                   {/* Senior Mode */}
@@ -689,12 +764,71 @@ export default function App() {
           )}
 
           {isScanning && (
-            <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white">
-               <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
-               <h2 className="text-2xl font-bold">Analyzing textbook page...</h2>
-               <p className="text-slate-400 mt-2">Using on-device AI to extract technical terms.</p>
+            <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white p-8 text-center">
+               <motion.div 
+                 animate={{ rotate: 360 }} 
+                 transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                 className="mb-6"
+               >
+                 <BrainCircuit className="w-16 h-16 text-blue-400" />
+               </motion.div>
+               <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                 Digitizing Textbook...
+               </h2>
+               <p className="text-slate-400 mt-2 max-w-xs">Extracting technical terms using on-device neural networks.</p>
             </div>
           )}
+
+          <AnimatePresence>
+            {detectedTerms.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="fixed inset-0 z-[310] flex flex-col items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+              >
+                <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-slate-200 dark:border-slate-800 relative">
+                  <button 
+                    onClick={() => setDetectedTerms([])}
+                    className="absolute top-6 right-6 p-2 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  
+                  <div className="mb-6">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">What term should we look up?</h3>
+                    <p className="text-sm text-slate-500">We found these potential technical words in your scan.</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                    {detectedTerms.map((term) => (
+                      <button
+                        key={term}
+                        onClick={() => {
+                          setQuery(term);
+                          handleSearch(term);
+                          setDetectedTerms([]);
+                        }}
+                        className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-full text-sm font-medium transition-all active:scale-95 capitalize"
+                      >
+                        {term}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase">Textbook Scan Complete</p>
+                      <p className="text-xs text-slate-500 italic">Select a word to see its Kannada meaning.</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Hero Result Card */}
           <AnimatePresence mode="wait">
@@ -711,6 +845,11 @@ export default function App() {
                     <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-1 capitalize leading-tight">
                       {entry.word}
                     </h2>
+                    {entry.isOffline && (
+                      <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[8px] font-bold uppercase tracking-wider mb-2">
+                        Offline Data
+                      </span>
+                    )}
                     {(entry.english?.title.toLowerCase() !== entry.word.toLowerCase() || entry.kannada?.title !== entry.word) && (
                       <div className="flex items-center gap-2 mt-1">
                         <ArrowRight className="w-3 h-3 text-slate-400" />
@@ -925,7 +1064,17 @@ export default function App() {
             </div>
 
             <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-5">Favorites</h3>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Favorites</h3>
+                {favorites.length > 0 && (
+                  <button 
+                    onClick={clearFavorites}
+                    className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {favorites.length === 0 ? (
                   <p className="text-xs text-slate-400 italic">No favorites yet.</p>

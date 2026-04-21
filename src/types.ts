@@ -19,4 +19,5 @@ export interface DictionaryEntry {
   english?: WikipediaSummary;
   kannada?: WikipediaSummary;
   timestamp: number;
+  isOffline?: boolean;
 }
